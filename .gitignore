@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+venv/
+
+# Electron/Node
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# App/runtime data
+backend/chroma_data/
+backend/chats/
+backend/uploaded_docs/
+backend/generated_files/
+desktop-app/chroma_data/
+
+# OS
+.DS_Store
+Thumbs.db
