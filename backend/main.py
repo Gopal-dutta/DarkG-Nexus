@@ -7,6 +7,18 @@ import os
 import uuid
 import re
 import time # Added for file handling
+import uvicorn
+import sys
+
+# Ensure UTF-8 output on Windows to avoid 'charmap' errors.
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 # ReportLab for PDF Generation
 from reportlab.lib.pagesizes import letter
@@ -41,6 +53,14 @@ GENERATED_DIR = "generated_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(GENERATED_DIR, exist_ok=True)
 
+def list_uploaded_docs():
+    if not os.path.exists(UPLOAD_DIR):
+        return []
+    return [
+        f for f in os.listdir(UPLOAD_DIR)
+        if f.endswith((".pdf", ".docx", ".txt"))
+    ]
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -62,8 +82,21 @@ def chat(request: ChatRequest):
         for msg in chat_history:
             formatted_history.append({"role": msg["role"], "content": msg["content"]})
 
+        docs_on_disk = list_uploaded_docs()
+        ingest_error = None
+        if not has_documents() and docs_on_disk:
+            ingested, ingest_error = ingest_documents(UPLOAD_DIR)
+            if not ingested:
+                ingest_error = ingest_error or "Indexing failed for an unknown reason"
+
         if has_documents():
             answer = query_docs(request.message)
+        elif docs_on_disk:
+            answer = (
+                "Documents were uploaded but indexing failed. "
+                f"Details: {ingest_error}. "
+                "Please re-upload or restart the backend, then try again."
+            )
         else:
             formatted_history.insert(0, {
                 "role": "system",
@@ -193,8 +226,15 @@ async def upload_document(file: UploadFile = File(...)):
         
         # 4. Ingest
         print("Starting ingestion...")
-        ingest_documents(UPLOAD_DIR)
-        
+        ingested, ingest_error = ingest_documents(UPLOAD_DIR)
+
+        if not ingested or not has_documents():
+            return {
+                "status": "error",
+                "message": f"Indexing failed: {ingest_error}",
+                "filename": file.filename,
+            }
+
         return {"status": "uploaded and indexed", "filename": file.filename}
     except Exception as e:
         import traceback
@@ -233,10 +273,7 @@ def clear_specific_chat_history(chat_id: str):
 
 @app.get("/documents")
 def get_documents():
-    docs = []
-    if os.path.exists(UPLOAD_DIR):
-        docs = [f for f in os.listdir(UPLOAD_DIR) if f.endswith(('.pdf', '.docx', '.txt'))]
-    return {"documents": docs}
+    return {"documents": list_uploaded_docs()}
 
 @app.post("/clear-documents")
 def clear_documents():
@@ -249,3 +286,6 @@ def clear_documents():
         return {"status": "documents cleared"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")

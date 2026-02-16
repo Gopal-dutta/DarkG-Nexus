@@ -607,7 +607,52 @@
         });
       }
 
+      function setBackendStatus(message, isError = false) {
+        let el = chatContainer.querySelector(".backend-status");
+        if (!el) {
+          el = document.createElement("div");
+          el.className = "backend-status";
+          el.style.margin = "12px auto";
+          el.style.padding = "10px 14px";
+          el.style.borderRadius = "10px";
+          el.style.maxWidth = "520px";
+          el.style.textAlign = "center";
+          el.style.background = "rgba(0, 0, 0, 0.35)";
+          el.style.border = "1px solid rgba(255, 255, 255, 0.15)";
+          el.style.color = "#cfe9ff";
+          chatContainer.prepend(el);
+        }
+        el.textContent = message;
+        if (isError) el.style.border = "1px solid rgba(255, 99, 99, 0.6)";
+      }
+
+      function clearBackendStatus() {
+        const el = chatContainer.querySelector(".backend-status");
+        if (el) el.remove();
+      }
+
+      async function waitForBackend(maxAttempts = 30, delayMs = 1000) {
+        setBackendStatus("Starting backend... Please wait.");
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            const res = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+            if (res.ok) {
+              clearBackendStatus();
+              return true;
+            }
+          } catch (e) {
+            // Keep retrying until maxAttempts is reached.
+          }
+          setBackendStatus(`Starting backend... (${attempt}/${maxAttempts})`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+        setBackendStatus("Backend not reachable. Please restart the app.", true);
+        return false;
+      }
+
       async function initializeApp() {
+        const ready = await waitForBackend();
+        if (!ready) return;
         await loadLastChat();
         await loadChatList();
         attachDragDropListeners();
@@ -686,6 +731,7 @@
           const data = await res.json();
           removeLoading(loadingId);
           displayMessage(data.response, "assistant", data.can_download_pdf);
+          await loadChatList();
         } catch (e) {
           removeLoading(loadingId);
           displayMessage(`Error: ${e.message}`, "assistant", false);
@@ -842,16 +888,31 @@
           setTimeout(createFirstChat, 3000);
         }
       }
+      async function deleteChat(chatId, event) {
+        event.stopPropagation();
+        if (!confirm("Delete this chat?")) return;
+        try {
+          await fetch(`${API_BASE}/chats/${chatId}`, { method: "DELETE" });
+          await loadChatList();
+          if (currentChatId === chatId) {
+            currentChatId = null;
+            chatContainer.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🚀</div><h2>Chat Deleted</h2><p>Start a new chat to continue.</p></div>`;
+          }
+        } catch (e) {
+          console.error("Delete failed:", e);
+        }
+      }
+
       async function loadChatList() {
         try {
           const res = await fetch(`${API_BASE}/chats`);
           const data = await res.json();
           if (data.chats) {
             chatList.innerHTML = data.chats
-              .map(
-                (c) =>
-                  `<div class="chat-item" onclick="switchChat('${c.id}')"><div class="chat-item-content"><div class="chat-item-title">${c.title}</div><div class="chat-item-time">${new Date(c.created_at).toLocaleDateString()}</div></div></div>`,
-              )
+              .map((c) => {
+                const isActive = c.id === currentChatId ? " active" : "";
+                return `<div class="chat-item${isActive}" onclick="switchChat('${c.id}')"><div class="chat-item-content"><div class="chat-item-title">${c.title}</div><div class="chat-item-time">${new Date(c.created_at).toLocaleDateString()}</div></div><button class="chat-item-delete" onclick="deleteChat('${c.id}', event)" title="Delete chat">✕</button></div>`;
+              })
               .join("");
           }
         } catch (e) {}

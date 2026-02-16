@@ -22,8 +22,8 @@ def create_chat(title: str = None) -> str:
     }
     
     chat_path = os.path.join(CHATS_DIR, f"{chat_id}.json")
-    with open(chat_path, "w") as f:
-        json.dump(chat_data, f, indent=2)
+    with open(chat_path, "w", encoding="utf-8") as f:
+        json.dump(chat_data, f, indent=2, ensure_ascii=False)
     
     return chat_id
 
@@ -34,7 +34,7 @@ def get_chat(chat_id: str) -> Dict[str, Any]:
     if not os.path.exists(chat_path):
         return None
     
-    with open(chat_path, "r") as f:
+    with open(chat_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def get_all_chats() -> List[Dict[str, Any]]:
@@ -47,7 +47,7 @@ def get_all_chats() -> List[Dict[str, Any]]:
     for filename in sorted(os.listdir(CHATS_DIR), reverse=True):
         if filename.endswith(".json"):
             chat_path = os.path.join(CHATS_DIR, filename)
-            with open(chat_path, "r") as f:
+            with open(chat_path, "r", encoding="utf-8") as f:
                 chat = json.load(f)
                 chats.append({
                     "id": chat["id"],
@@ -80,8 +80,8 @@ def add_message_to_chat(chat_id: str, role: str, content: str):
     
     # Save updated chat
     chat_path = os.path.join(CHATS_DIR, f"{chat_id}.json")
-    with open(chat_path, "w") as f:
-        json.dump(chat, f, indent=2)
+    with open(chat_path, "w", encoding="utf-8") as f:
+        json.dump(chat, f, indent=2, ensure_ascii=False)
     
     return True
 
@@ -124,7 +124,7 @@ def clear_chat_history(chat_id: str) -> bool:
     chat["messages"] = []
     
     chat_path = os.path.join(CHATS_DIR, f"{chat_id}.json")
-    with open(chat_path, "w") as f:
-        json.dump(chat, f, indent=2)
+    with open(chat_path, "w", encoding="utf-8") as f:
+        json.dump(chat, f, indent=2, ensure_ascii=False)
     
     return True

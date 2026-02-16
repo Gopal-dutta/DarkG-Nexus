@@ -16,6 +16,20 @@ Settings.embed_model = HuggingFaceEmbedding(
 )
 Settings.llm = None 
 
+def configure_tokenizer():
+    try:
+        import tiktoken
+
+        encoding = tiktoken.get_encoding("cl100k_base")
+        Settings.tokenizer = encoding.encode
+        print("Tokenizer configured: tiktoken cl100k_base")
+    except Exception as e:
+        # Fallback avoids packaged tiktoken data lookup failures
+        Settings.tokenizer = lambda text: text.split()
+        print(f"Tokenizer fallback in use: {e}")
+
+configure_tokenizer()
+
 # Initialize persistent Chroma DB
 persist_dir = "chroma_data"
 os.makedirs(persist_dir, exist_ok=True)
@@ -42,11 +56,13 @@ def load_index():
 
 def ingest_documents(folder="uploaded_docs"):
     global index
-    if not os.path.exists(folder): return False
+    if not os.path.exists(folder):
+        return False, "Upload folder does not exist"
     try:
         print("Loading documents...")
         documents = SimpleDirectoryReader(folder).load_data()
-        if not documents: return False
+        if not documents:
+            return False, "No readable documents found"
         
         print("Indexing documents...")
         if index is None:
@@ -54,10 +70,10 @@ def ingest_documents(folder="uploaded_docs"):
         else:
             for doc in documents:
                 index.insert(doc)
-        return True
+        return True, None
     except Exception as e:
         print(f"Error: {e}")
-        return False
+        return False, str(e)
 
 # === NEW: CONTINUOUS LEARNING ===
 def learn_from_chat(user_query, ai_response):
